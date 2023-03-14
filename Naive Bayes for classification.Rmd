@@ -1,0 +1,149 @@
+---
+title: "Assignment 3"
+author: "VENKATESWARA RAO JAMMULA"
+date: "2023-03-03"
+output: word_document
+---
+
+
+```{r}
+library(caret)
+library(dplyr)
+library(ggplot2)
+library(lattice)
+library(e1071)
+```
+
+```{r}
+#Reading Data 
+ub.data <- read.csv("C:/Users/Vinny/Downloads/UniversalBank.csv")
+View(ub.data)
+```
+
+```{r}
+#Removing ID and Zip Code and changing numerical variable to catogorical variables
+ub.dataframe <- ub.data %>% select(Age, Experience, Income, Family, CCAvg, Education, Mortgage, Personal.Loan , Securities.Account, CD.Account, Online, CreditCard)
+ub.dataframe$CreditCard <- as.factor(ub.dataframe$CreditCard)
+ub.dataframe$Personal.Loan <- as.factor((ub.dataframe$Personal.Loan))
+ub.dataframe$Online <- as.factor(ub.dataframe$Online)
+```
+
+```{r}
+#seprating data into 60% training and  40% validation sets 
+select.var <- c(8,11,12)
+set.seed(123)
+Training.Index = createDataPartition(ub.dataframe$Personal.Loan, p=0.60, list=FALSE)
+Training.df = ub.dataframe[Training.Index,select.var]
+Validation.df = ub.dataframe[-Training.Index,select.var]
+```
+
+```{r}
+#TaskA: creating a pivot table with Online as a column variable, CC and loan as a row variable for the training set.
+attach(Training.df)
+ftable(CreditCard,Personal.Loan,Online)
+detach(Training.df)
+```
+
+```{r}
+#TaskB : Probability from pivot table ,Online=1 and CC=1, To get the conditional probability that Loan=1.
+
+Probability <- 51/(51+467)
+Probability
+```
+
+```{r}
+#TaskC : Creating two separate pivot tables for the training data. with Loan in rows as a function of Online in columns and the other have Loan in rows as a function of CC.
+attach(Training.df)
+ftable(Personal.Loan,Online)
+ftable(Personal.Loan,CreditCard)
+detach(Training.df)
+```
+
+```{r}
+#TaskD: Computing [P(A | B) means “the probability of A given B”]
+
+#1 P(CC = 1 | Loan = 1) (the proportion of credit card holders among the loan acceptors) 
+P1 <- 84/(84+204)
+P1
+
+#2 P(Online = 1 | Loan = 1) 
+P2 <- 176/(112+176)
+P2
+
+#3 P(Loan = 1) (the proportion of loan acceptors) 
+P3 <- 288/(1935+777+204+84)
+P3
+
+#4 P(CC = 1 | Loan = 0)  
+P4 <- 777/(1935+777)
+P4
+
+#5 P(Online = 1 | Loan = 0)
+P5<- 1611/(1611+1101)
+P5
+
+#6 P(Loan = 0) 
+P6 <- (2712/3000)
+P6
+```
+
+```{r}
+#TaskE: Computing the naive Bayes probability P(Loan = 1 | CC = 1, Online = 1). 
+
+P_NB <- (P1*P2*P3)/ ((P1*P2*P3)+(P4*P5*P6))
+P_NB
+```
+
+```{r}
+#TaskF Comparing  probability of naive bayes with the one obtained from the pivot table in (B).
+
+Probability
+P_NB
+
+## A normal probability follows a normal distribution and uses the data to estimate the mean and standard deviation of the distribution. It can be used for regression or classification problems and performs well when the data is normally distributed.
+
+##naive Bayes, on the other hand, is a probabilistic algorithm that predicts using Bayes' theorem. It makes the naive assumption that the features are conditionally independent given the class label, which is frequently violated in practice. However, in practice, it can be very effective, particularly for text classification and other high-dimensional problems.
+
+ ## In the given Case Normal Probability works best and accurate as its considering all data from pivot table and there is no much significant difference between normal probability and naive Bayes method.
+
+```
+
+```{r}
+#TaskG 
+
+# entries in this table are needed for computing P(Loan = 1 | CC = 1, Online = 1)? 
+
+##The pivot table in Task B can be used to compute P(LOAN=1|CC=1,Online=1) without using the Naive Bayes model, whereas the two tables in Task C shows how P(LOAN=1|CC=1,Online=1) is computed using the Naive Bayes model.
+
+#using Naive Bayes
+
+ub_data <- naiveBayes(Personal.Loan ~ ., data = Training.df)
+ub_data
+
+#Training set
+Prediction_Training <- predict(ub_data, newdata = Training.df)
+confusionMatrix(Prediction_Training, Training.df$Personal.Loan)
+
+##This model was very good at detecting postive cases as it had high  sensitivity but not as good at identifying negative cases as it had low specificity, there were no actual values available for the model to compare its predictions . As a result, the model predicted that all values would be zero, which is a common default prediction in the absence of any other information.the model predicted a large number of zeros. Even if the model missed all the positive cases (i.e., it predicted them as zeros), it still achieved a high accuracy of 90.4%. This is because the vast majority of cases were actually negative (i.e., zeros), and the model correctly predicted them as such.
+
+##In summary, The model was very sensitive but not very specific, and that its high accuracy was due to the prevalence of negative cases and the default prediction of zeros in the absence of any other information.
+
+prediction_Validation <- predict(ub_data, newdata=Validation.df, type="raw")
+Prediction <- predict(ub_data, newdata = Validation.df)
+confusionMatrix(Prediction, Validation.df$Personal.Loan)
+
+##The model predicts a lower probability than the one estimated manually in TaskE. This means that the model is more conservative in its predictions and assigns a lower probability to the event occurring than the manual estimation.
+
+##Naive Bayes model predicts the same probability as the previous methods. This means that the model's prediction is consistent with the probabilities estimated in previous tasks and predicted probability is closer to TaskB. This means that the Naive Bayes model's prediction is more similar to the probabilities estimated in TaskB than the manual estimation in TaskE.
+
+##The possibility of error in the manual estimation in TaskE is higher because it involves manual computation and rounding fractions. This implies that the manual estimation may be less precise and more prone to errors than the Naive Bayes model's prediction.
+
+
+#entry that corresponds to P(Loan = 1 | CC = 1, Online = 1).
+
+ub_NB<-naiveBayes(Personal.Loan~ Online +CreditCard, data=Training.df) 
+Prediction <- data.frame(Online= 1, CreditCard= 1) 
+predict(ub_NB,Prediction,type='raw')
+
+## The ouptputs from this task and taskE are almost same the small difference in the values is because of the rounding off the values which will not make any significance difference.
+```
