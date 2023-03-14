@@ -1,0 +1,123 @@
+---
+title: "FML, ASSIGNMENT 2"
+author: "VENKATESWARA RAO JAMMULA"
+date: "2023-02-18"
+output: word_document
+---
+
+```{r}
+#Importing Library
+
+library('caret')
+library('ISLR')
+library('dplyr')
+library('class')
+
+#Importing the data
+
+ub.data <- read.csv("C:/Users/Vinny/Downloads/UniversalBank.csv")
+
+#Question1
+
+#removing ID(1) and ZIP Code(5) 
+
+ub.data <- subset(ub.data, select = -c(1, 5))
+
+#converting variable
+
+ub.data_dummy<- as.factor(ub.data$Education)
+ub.data$Personal.Loan =  as.factor(ub.data$Personal.Loan)
+
+#normalizing data.
+
+ub_norm <- preProcess(ub.data[, -8],method = c("center", "scale"))
+ub.data_norm <- predict(ub_norm,ub.data)
+summary(ub.data)
+
+#dividing data into 60% training and 40% testing
+
+ub.training_index <- createDataPartition(ub.data$Personal.Loan, p = 0.6, list = FALSE)
+training.df <- ub.data_norm[ub.training_index,]
+validating.df <- ub.data_norm[-ub.training_index,]
+print(head(training.df))
+
+#Predicting using knn with given value of k =1.
+
+
+ub.predict <- data.frame(Age = 40, Experience = 10, Income = 84, Family = 2,CCAvg = 2, Education = 1, Mortgage = 0, Securities.Account =0, CD.Account = 0, Online = 1, CreditCard = 1)
+
+ub.predict_Norm <- predict(ub_norm,ub.predict)
+prediction <- knn(train= as.data.frame(training.df[,1:7,9:12]),test = as.data.frame(ub.predict_Norm[,1:7,9:12]),cl= training.df$Personal.Loan,k=1)
+print(prediction)
+```
+
+
+```{r}
+#Question2 
+
+#finding best value of k with highest accuracy
+
+set.seed(123)
+UB.Bank <- trainControl(method = "repeatedcv", number = 3, repeats = 2)
+searchGrid <- expand.grid(k = 1:10)
+knn.model <- train(Personal.Loan ~ ., data = training.df, method = "knn", tuneGrid = searchGrid, trControl = UB.Bank)
+knn.model
+```
+#K = 3  balances between overfitting and underfitting
+
+```{r}
+#Question3
+
+#Confusion matrix with best K
+
+predictors_bank <- predict(knn.model, newdata = validating.df)
+conf_matrix <- confusionMatrix(predictors_bank, validating.df$Personal.Loan)
+conf_matrix
+```
+
+
+```{r}
+#Question4
+
+ub.predict_Norm <- data.frame(Age = 40, Experience = 10, Income = 84, Family = 2,CCAvg = 2, Education = 1, Mortgage = 0,Securities.Account =0, CD.Account = 0, Online = 1,CreditCard = 1)
+
+#Customers are classified using a trained model with the highest k value.
+
+ub.predict_Norm <- predict(ub_norm, ub.predict)
+predict(knn.model, ub.predict_Norm)
+
+#shows a graph with different K values w.r.t accuracy , k=3 is the best.
+
+plot(knn.model, type = "b", xlab = "K-Value", ylab = "Accuracy")
+```
+
+
+```{r}
+#Question5
+
+#Repartition of data training with 50% of data, validation with 30% of data, testing with 20% of data.
+
+training_set <- 0.5 #(50%)
+ub.training_index <- createDataPartition(ub.data$Personal.Loan, p = 0.5, list = FALSE)
+training.df <- ub.data_norm[ub.training_index,]
+
+validation_set <- 0.3 #(30%)
+ub.validating_index <- createDataPartition(ub.data$Personal.Loan, p = 0.3, list = FALSE)
+validating.df <- ub.data_norm[ub.validating_index,]
+
+testing_set <- 0.2 #(20%)
+ub.testing_index <- createDataPartition(ub.data$Personal.Loan, p = 0.2, list = FALSE)
+testing.df <- ub.data_norm[ub.testing_index,]
+
+
+Training_knn <- knn(train = training.df[,-8], test = training.df[,-8], cl = training.df[,8], k =3)
+
+Validating_knn <- knn(train = training.df[,-8], test = validating.df[,-8], cl = training.df[,8], k =3)
+
+Testing_knn <- knn(train = training.df[,-8], test = testing.df[,-8], cl = training.df[,8], k =3)
+
+confusionMatrix(Training_knn, training.df[,8])
+confusionMatrix(Validating_knn, validating.df[,8])
+confusionMatrix(Testing_knn, testing.df[,8])
+
+```
