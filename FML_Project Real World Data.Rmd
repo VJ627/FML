@@ -1,0 +1,264 @@
+---
+title: "Fml Final"
+author: "Venkateswara Rao Jammula"
+date: "2023-05-03"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r}
+library(cluster)
+library(caret)
+library(dendextend)
+library(knitr)
+library(factoextra)
+library(readr)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(tinytex)
+library(FactoMineR)
+library(ggcorrplot)
+library(leaps)
+library(dbscan)
+library(esquisse)
+```
+
+```{r}
+#Using only the numerical variables to cluster the source of fuel & Justify the various choices made in conducting the cluster analysis, such as weights for different variables, the specific clustering algorithm(s) used, the number of clusters formed, and so on.
+
+# Reading data
+fuel_data_og <- read.csv("C:/Users/Vinny/Downloads/fuel_receipts_costs_eia923.csv") # Excel cleaned
+t(t(names(fuel_data_og)))
+
+fuel_train <- fuel_data_og[, 15:18]
+t(t(names(fuel_train)))
+
+#removing missing values
+fuel_train <- na.omit(fuel_train)
+nrow(fuel_train)
+
+# Set seed and sample about 2% of the data
+set.seed(8627)
+n <- round(nrow(fuel_train) * 0.02)
+sampled_data <- fuel_train[sample(nrow(fuel_train), n), ]
+nrow(sampled_data)
+
+# Partition sampled data into training and test sets
+fuel_train <- sampled_data[1:round(0.75 * n), ]
+nrow(fuel_train)
+fuel_test <- sampled_data[(round(0.75 * n) + 1):n, ]
+nrow(fuel_test)
+
+# Add cluster assignment as a column to the original data frame
+set.seed(8627)
+k5 <- kmeans(fuel_train, centers = 5, nstart = 25)
+fuel_train$Cluster <- as.factor(k5$cluster)
+
+# Scale the numerical variables
+fuel_vj <- scale(fuel_train[, 1:4])
+
+# Visualize the correlation matrix
+corr <- cor(fuel_vj)
+ggcorrplot(corr, outline.color = "grey50", lab = TRUE, hc.order = TRUE, type = "full")
+
+# Determine the optimal number of clusters
+
+elbow_method <- fviz_nbclust(fuel_vj, kmeans, method = "wss") +
+  labs(subtitle = "Elbow Method")
+elbow_method
+
+silhouette_method <- fviz_nbclust(fuel_vj, kmeans, method = "silhouette") + 
+  labs(subtitle = "Silhouette Method")
+silhouette_method
+
+# i.e k=5
+
+# Perform k-means clustering with 5 clusters
+k5_cluster <- kmeans(fuel_vj, 5)
+
+# Visualize the clusters using a scatter plot
+fviz_cluster(k5_cluster, data = fuel_vj)
+
+# Print the cluster centers
+k5$centers
+
+clusplot(fuel_vj,k5$cluster, color = TRUE, shade = TRUE, 
+         labels = 2,
+         lines = 0)
+
+fuel_vj_clustered <- cbind(fuel_vj, Cluster = as.factor(k5$cluster))
+
+
+clusplot(fuel_vj_clustered, k5$cluster, color = TRUE, shade = TRUE, 
+         labels = 2, lines = 0)
+```
+#After using kmeans to cluster, I have seen that the cluster are over lapping, its common for k-means to produce overlapping clusters, especially when the data is high-dimensional or when there are outliers. In such cases, it is good to consider using a different clustering algorithm, like a density-based clustering algorithm i.e DBSCAN, which can identify clusters of arbitrary shape and handle noise and outliers. DBSCAN defines clusters as regions of high density separated by regions of low density. Points that do not belong to any cluster are classified as noise. Like k-means, DBSCAN requires setting hyperparameters, but the choice of these hyperparameters can be less sensitive than k-means.
+
+
+#Starting a new approach with a different clustering method - DBSCAN, For better clustering I’m considering to remove variables that don’t have any significance and columns with missing values greater than 50%
+```{r}
+# data processing
+
+#reading data
+
+fuel_data.OG<-read.csv("C:/Users/Vinny/Downloads/fuel_receipts_costs_eia923 _1.csv") #to be cleaned 
+
+# replacing data with NA to calculate % of missing values 
+
+Na<-  fuel_data.OG%>% 
+  replace(.=="",NA)
+MV<- (colMeans(is.na(Na))*100)
+fuel_data.OG_1<- subset(fuel_data.OG,select=-c(1:5,7:8,12:14,22:25,26:30))
+
+set.seed(8627)
+n <- round(nrow(fuel_data.OG_1) * 0.02)
+fuel_data <- fuel_data.OG_1[sample(nrow(fuel_data.OG_1), n), ]
+
+#changing data type by creating dummy variables
+
+#Converting fuel_type_code_pudl into numerical data 
+fuel_coal <- ifelse(fuel_data$fuel_type_code_pudl=="coal" ,1,0)
+fuel_gas <- ifelse(fuel_data$fuel_type_code_pudl=="gas" ,1,0)
+fuel_oil <- ifelse(fuel_data$fuel_type_code_pudl=="oil" ,1,0)
+
+#Appending these new columns with the existing dataframe
+
+fuel_new_data<- cbind(fuel_data[,-3],fuel_coal,fuel_gas,fuel_oil)
+
+#splitting data into training and testing
+data_split<-createDataPartition(fuel_new_data$fuel_received_units,p=.75,list=FALSE)
+fuel_training<-fuel_new_data[data_split,]
+fuel_testing<-fuel_new_data[-data_split,]
+fuel_training[is.na(fuel_training)] <- 0
+fuel_testing[is.na(fuel_testing)] <- 0
+
+```
+
+```{r}
+#considering numerical variables
+
+fuel_training_num <- fuel_training[, c(4:9, 11:13)]
+
+#Normalizing the data
+train_norm <- scale(fuel_training_num)
+
+# Creating kNN distance plot
+dbscan::kNNdistplot(train_norm, k = 5)
+abline(h = 0.5, col = "green")
+
+DB <- dbscan::dbscan(train_norm, eps = 0.5, minPts = 100)
+DB
+
+#Plotting the clusters 
+
+fviz_cluster(DB,fuel_training_num,main="3 clusters")
+
+#CLUSTER1 - Oil
+#CLUSTER2 - coal
+#CLUSTER3 - gas
+
+#Assigning clusters to the original data
+
+comb_data<-cbind(fuel_training_num,DB$cluster)
+
+#interpreting clusters w.r.t numerical variables 
+
+fuel_mean <- fuel_training_num %>% mutate(Cluster = head(DB$cluster, nrow(fuel_training_num))) %>% group_by(Cluster) %>% summarise_all("mean")
+head(fuel_mean)
+
+```
+```{r}
+#Interpreting the pattern in the clusters w.r.t the Categorical variables
+
+# Assign clusters to data points
+
+#interpreting clusters w.r.t numerical variables 
+plots <- fuel_training[,c(1:3,10)] %>% mutate(Clusters=DB$cluster)
+ggplot(plots, mapping = aes(factor(Clusters), 
+                            fill =energy_source_code_label))+
+  geom_bar(position='dodge')+
+  labs(x ='Clusters')
+ggplot(plots, mapping = aes(factor(Clusters), 
+                            fill =fuel_group_code))+
+  geom_bar(position='dodge')+
+  labs(x ='Clusters')
+ggplot(plots, mapping = aes(factor(Clusters), 
+                            fill =contract_type_code_label))+
+  geom_bar(position='dodge')+
+  labs(x ='Clusters')
+ggplot(plots, mapping = aes(factor(Clusters), 
+                            fill =primary_transportation_mode_code))+
+  geom_bar(position='dodge')+
+  labs(x ='Clusters')
+```
+#Cluster 1: Oil
+#oil is the most expensive type of fuel in the USA with an average cost per MMBtu of 10.49.
+#oil is received in much smaller quantities than gas and coal.
+#oil does not include any ash or mercury but contains a small amount of sulfur.
+#oil is only bought right away, no contract-based purchases noted.
+#Distillate Fuel Oil is the energy source code for this fuel.
+
+
+
+#Cluster 2: Coal
+#coal is the least expensive type of fuel and widely supplied in the USA.
+#coal contains ash, sulfur, and mercury unlike the other two fuels.
+#coal's average heat energy received from coal is 19.33 BTU/short ton.
+#Majority of coal is bought immediately.
+#BIT and SUB are the energy source codes, indicating that conventional steam coal is most supplied in the United States.
+
+
+
+#Cluster 3: Gas
+#Gas is delivered in the greatest quantity of average fuel units since it has the lowest average fuel cost per MMbtu.
+#Gas doesn't contain any ash, sulfur, or mercury and produces less heat per unit of fuel.
+#Natural gas is the energy source code.
+#Pipelines (PL) are the most widely utilized mode of transportation to supply gas
+```{r}
+#________________________________________________________________________________extra credit____________________________________________________________________________________
+
+#extra Credit
+
+#Running the multiple linear regression model to determine the best set of variables to predict fuel_cost_per_mmbtu by considering variables which were used to form clusters
+
+Model<- lm(fuel_training_num$fuel_cost_per_mmbtu~.,
+           data=fuel_training_num)
+
+summary(Model)
+
+#Fuel received units,fuel_type_coal and fuel_type_oil best determine the fuel_cost_per_mmbtu variable.
+
+#Prediction of the above model on Test data
+
+test_data<- fuel_testing[,c(4:9,11:13)]
+
+
+test_Model<-predict(Model, data = test_data)
+```
+
+```{r}
+#Predicting clusters for Test data
+
+testing_norm<-scale(test_data)
+clusters_testing<- predict(DB,newdata = testing_norm,data=train_norm)
+
+#Appending cluster info and predicted fuel cost per unit values to the test data:
+testing_predicted_data<- cbind(test_data,clusters_testing)
+head(testing_predicted_data)
+
+#comparing predicted values with actual
+Mean_prediction_test <- testing_predicted_data %>% mutate(Cluster = clusters_testing) %>% group_by(Cluster) %>% summarise_all("mean")
+head(Mean_prediction_test)
+
+
+#The difference in the predicted and values are high
+
+```
+
+
+
+
+
