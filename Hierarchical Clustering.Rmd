@@ -1,0 +1,209 @@
+---
+title: "FML5"
+author: "Venkateswara Rao Jammula"
+date: "2023-04-08"
+output: word_document
+---
+```{r}
+#loading Library's
+
+library(cluster)
+library(caret)
+library(dendextend)
+library(knitr)
+library(factoextra)
+library(readr)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(tinytex)
+library(FactoMineR)
+library(ggcorrplot)
+
+```
+
+```{r}
+
+#Task 1 : Apply hierarchical clustering to the data using Euclidean distance to the normalized measurements. Use Agnes to compare the clustering from single linkage, complete linkage, average linkage, and Ward. Choose the best method.
+
+# Reading data
+cereals_data <- read.csv("C:/Users/Vinny/Downloads/Cereals.csv")
+cereals.df <- data.frame(cereals_data[,4:16])
+
+# removing missing values
+cereals.df <- na.omit(cereals.df)
+
+# Normailzing Data to do hierarchical clustering
+cereals_vj <- scale(cereals.df)
+distancz <- get_dist(cereals.df)
+fviz_dist(distancz)
+
+corr <- cor(cereals_vj)
+ggcorrplot(corr, outline.color = "grey50", lab = TRUE, hc.order =  TRUE , type = "full")
+
+# using the Euclidean Distance
+ED <- dist(cereals_vj, method = "euclidean")
+Hi_Cl <- hclust(ED, method = "complete")
+
+
+# Dendogram Plotting
+
+
+options(repr.plot.width = 6, repr.plot.height = 4) # Define the plot size
+
+# Plot the dendrogram
+plot(x = Hi_Cl,               # The hierarchical clustering object
+     cex = 0.7,               # The size of the labels
+     hang = -1,               # The orientation of the dendrogram
+     main = "Hierarchical clustering dendrogram",  # The title of the plot
+     xlab = "Clusters",       # The x-axis label
+     ylab = "Distance")       # The y-axis label
+
+#  Using Agnes to compare the clustering from single linkage, complete linkage, average linkage, and Ward.
+        #&
+# choosing the best method
+
+single_linkage <- agnes(cereals_vj, method = "single")
+print(single_linkage$ac)
+
+complete_linkage <- agnes(cereals_vj, method = "complete")
+print(complete_linkage$ac)
+
+average_linkage <- agnes(cereals_vj, method = "average")
+print(average_linkage$ac)
+
+ward <- agnes(cereals_vj, method = "ward")
+print(ward$ac)
+
+#Based on the agglomerative coefficient values, the Ward method has the highest value 0.9046042, indicating that it produced the best clustering results among the methods tested. Therefore, the Ward method is the best method to choose for clustering the cereals data.
+
+```
+
+```{r}
+#Task2 : How many clusters would you choose ?
+
+# Plot the dendrogram using ward linkage
+
+pltree(ward, cex = 0.5, hang = -1, main = "Dendrogram of agnes (Using Ward)")
+
+# Add colored rectangles to the dendrogram for 5 clusters
+rect.hclust(ward, k = 5, border = 2:7)
+
+# Assign cereal data to 5 clusters using cutree()
+clust_data <- cutree(ward, k = 5)
+
+# Combine the cluster assignments with the normalized cereal data
+clust_norm <- cbind.data.frame(cereals_vj,clust_data )
+
+fviz_cluster(list(data = clust_norm, cluster = clust_data))
+
+# Compute the within-cluster sum of squares for different numbers of clusters
+wss <- fviz_nbclust(clust_norm, kmeans, method = "wss") 
+
+# Plot the elbow curve to determine the optimal number of clusters
+plot(wss, xlab = "Number of clusters", ylab = "Within-cluster sum of squares")
+
+# k = 5 can be chosen from above clustering 
+
+```
+
+```{r}
+#Task3 : comment on the structure of the clusters and on their stability.
+
+#Creating partitions
+set.seed(123)
+partition_1 <- cereals.df[1:50,]
+partition_2 <- cereals.df[51:74,]
+
+# Hierarchical Clustering,  considering k = 5.
+
+single_cl <- agnes(scale(partition_1), method = "single")
+complete_cl <- agnes(scale(partition_1), method = "complete")
+average_cl <- agnes(scale(partition_1), method = "average")
+ward_cl <- agnes(scale(partition_1), method = "ward")
+cbind(single=single_cl$ac , complete=complete_cl$ac , average= average_cl$ac , ward= ward_cl$ac)
+pltree(ward_cl, cex = 0.6, hang = -1, main = "Dendogram of Agnes with Partitioned Data (Using Ward)")
+rect.hclust(ward_cl, k = 5, border = 2:7)
+CutTree <- cutree(ward_cl, k = 5)
+
+#cluster centroids 1 - 2
+
+result_vj <- as.data.frame(cbind(partition_1, CutTree))
+result_vj[result_vj$CutTree==1,]
+
+centroid_1 <- colMeans(result_vj[result_vj$CutTree==1,])
+result_vj[result_vj$CutTree==2,]
+
+centroid_2 <- colMeans(result_vj[result_vj$CutTree==2,])
+result_vj[result_vj$CutTree==3,]
+
+centroid_3 <- colMeans(result_vj[result_vj$CutTree==3,])
+result_vj[result_vj$CutTree==4,]
+
+centroid_4 <- colMeans(result_vj[result_vj$CutTree==4,])
+
+centroids <- rbind(centroid_1, centroid_2, centroid_3, centroid_4)
+cen_comb <- as.data.frame(rbind(centroids[,-14], partition_2))
+
+#consistency of the cluster assignments are compared to the assignments based on all the data.
+
+
+# Calculate distance matrix
+distance <- get_dist(cen_comb)
+
+matrix <- as.matrix(distance)
+
+
+# Assign clusters based on distance matrix
+dataframe1 <- data.frame(data=seq(1,nrow(partition_2),1), Clusters = rep(0,nrow(partition_2)))
+for(i in 1:nrow(partition_2)) {
+  dataframe1[i,2] <- which.min(matrix[i+4, 1:4])
+}
+dataframe1
+
+cbind(clust_norm$clust_data[51:74], dataframe1$Clusters)
+
+table(clust_norm$clust_data[51:74] == dataframe1$Clusters)
+
+# Compare original cluster assignments with newly assigned clusters
+
+original_clusters <- clust_norm$clust_data[51:74]
+new_clusters <- dataframe1$Clusters
+consistency <- sum(original_clusters == new_clusters) / length(original_clusters)
+
+# Print the consistency score
+cat("Consistency score:", consistency)
+
+
+#Based on the comparison of the clustering results with the original cluster assignments, we found that 12 of the observations' findings were false, while 12 were true and consistency score is 0.5 ,This suggests that the model is only partially unstable, meaning that some of the clusters identified by the model are consistent with the original clusters, while others are not. 
+
+```
+
+```{r}
+#Task4 : finding  a cluster of healthy cereals 
+ 
+#Clustering cereals for healthy diet.
+
+hc <- cereals_data
+hc_data <- na.omit(hc)
+clust <- cbind(hc_data, clust_data)
+clust[clust$clust_data==1,]
+clust[clust$clust_data==2,]
+clust[clust$clust_data==3,]
+clust[clust$clust_data==4,]
+
+#The variables that are measured are on the same scale so i find there is no need to normalize data but In general, normalizing data can be beneficial for clustering analysis as it can help to mitigate the impact of variables with larger ranges on the resulting clusters, As normalization is not necessary, the data can be used as it is for clustering after making sure that the variables are on a comparable scale and any missing values have been appropriately handled by removing rows with missing data or imputing missing values.
+
+# selecting the best diet cluster.
+G1<-mean(clust[clust$clust_data==1,"rating"])
+G1
+G2<-mean(clust[clust$clust_data==2,"rating"])
+G2
+G3<-mean(clust[clust$clust_data==3,"rating"])
+G3
+G4<-mean(clust[clust$clust_data==4,"rating"])
+G4
+
+# From the above, Cluster 1 has higher value , i.e Cluster 1 set of cereals  may be chosen to include in elementary public schools daily cafeterias for a healthy diet.
+
+```
