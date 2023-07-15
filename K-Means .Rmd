@@ -1,0 +1,192 @@
+---
+title: "FML K means Assignment 4"
+author: "VENKATESWARA RAO JAMMULA"
+date: "2023-03-17"
+output: word_document
+---
+
+```{r}
+library(readr)
+library(factoextra)
+library(flexclust)
+library(dplyr)
+library(cluster)
+library(tidyverse)
+library(ggplot2)
+library(tinytex)
+library(FactoMineR)
+library(ggcorrplot)
+```
+
+```{r}
+# Reading data
+
+pharma_OG <- read.csv("C:/Users/Vinny/Downloads/Pharmaceuticals.csv")
+glimpse(pharma_OG)
+
+t(t(names(pharma_OG)))
+
+```
+
+```{r}
+# Task (A) : Using only the numerical variables (1 to 9) to cluster the 21 firms & Justify the various choices made in conducting the cluster analysis, such as weights for different variables, the specific clustering algorithm(s) used, the number of clusters formed, and so on.
+
+row.names <- pharma_OG[,1]
+
+# considering only numerical variables 
+
+pharma_MOD <- pharma_OG[,3:11]
+pharma_MOD
+
+t(t(names(pharma_MOD)))
+
+pharma <- scale(pharma_MOD)
+head(pharma)
+
+distance <- get_dist(pharma)
+fviz_dist(distance)
+
+#checking for co relations 
+pharma_co <- pharma_OG %>%
+  select_if(is.numeric) %>%
+  cor()
+ggcorrplot(pharma_co, 
+           outline.color = "grey50", 
+           lab = TRUE,
+           hc.order = TRUE,
+           type = "full") 
+
+#There is a strong positive correlations between Revenue on Assets, Revenue on Equity, Net Profit Margin, and Market Cap suggest that these variables form a cluster, it is important to remember that correlation does not necessarily imply clustering or causation. To determine whether these variables form a cluster, a clustering analysis would be necessary. This would involve selecting an appropriate algorithm, setting the number of clusters, and interpreting the resulting clusters based on domain knowledge. Preprocessing steps such as scaling or transforming the variables also be necessary to ensure comparability and similar scales. 
+
+# number of clusters using Elbow Method ,Gap Stat Method & Silhouette Method
+
+elbow_method <-fviz_nbclust(pharma, kmeans, method = "wss") +
+  labs(subtitle = "Elbow Method")
+elbow_method
+
+gap_stat_method <-fviz_nbclust(pharma, kmeans, method = "gap_stat") + 
+  labs(subtitle = "Gap Stat Method")
+gap_stat_method
+
+
+sailhouette_Mehtod <- fviz_nbclust(pharma, kmeans, method = "silhouette") + 
+  labs(subtitle = "Silhouette Method")
+sailhouette_Mehtod
+
+#k = 5 is chosen from Elbow.Gap static ,silhouette Method, form the graphs 
+
+# Set the random seed for reproducibility
+set.seed(123)
+
+# Perform k-means clustering with 5 clusters and 25 random starts
+k5 <- kmeans(pharma, centers = 5, nstart = 25)
+
+# Print the cluster centers
+k5$centers
+
+# Visualize the clusters using a scatter plot
+fviz_cluster(k5, data = pharma)
+
+# Print the details of the k-means clustering
+k5
+
+
+# Perform k-means clustering with 5 clusters
+k5_cluster <- kmeans(pharma, 5)
+
+#There are five clusters visible on the cluster graph, each of which has a distinct color and shape. The centriod, or center point, is where the cluster is concentrated. After 25 restarts, we have reached the final center points because nothing will change unless and until the new data is added.
+
+# Visualize the clusters using a scatter plot
+
+clusplot(pharma,k5$cluster, color = TRUE, shade = TRUE, 
+         labels = 2,
+         lines = 0)
+
+pharma_clustered <- cbind(pharma, Cluster = as.factor(k5$cluster))
+
+
+clusplot(pharma_clustered, k5$cluster, color = TRUE, shade = TRUE, 
+         labels = 2, lines = 0)
+
+```
+
+```{r}
+#Task(B): Interpreting the clusters with respect to the numerical variables used in forming the clusters.
+
+# Computeing the mean values for each variable within each cluster
+aggregate(pharma, by = list(k5_cluster$cluster), FUN = mean)
+
+
+Pharma_df <- data.frame(pharma,k5$cluster)
+Pharma_df
+
+#cluster 1:ABT,AHM,AZN,IVX,LLY,NVS,SGP,WYE
+#This cluster is characterized by relatively low market capitalizations, negative betas, low P/E ratios, and moderate ROE and ROA. These companies have a negative correlation with leverage and a slightly above-average net profit margin. 
+
+#cluster 2 BAY,CHTT,IVX
+#This cluster is characterized by extremely low market capitalizations, high betas, very high P/E ratios, negative ROE and ROA, and negative net profit margins. These companies have a high correlation with leverage and a negative correlation with revenue growth.
+
+#cluster 3 AGN,PHA
+#This cluster is characterized by relatively low market capitalizations, negative betas, low P/E ratios, and negative ROE and ROA. These companies have a negative correlation with leverage and revenue growth and a below-average net profit margin. 
+
+#cluster 4 GSK,JNJ,MRK,PFE
+#Negative betas, low to moderate P/E ratios, high ROE and ROA, and relatively high market capitalizations are the defining characteristics of this cluster. These companies net profit margins are above average, and revenue growth is positively correlated with them. 
+
+#cluster 5 AVE,ELN,MRX,WPI
+# Positive betas, low to moderate P/E ratios, relatively high market capitalizations, and moderate to high ROE and ROA are the distinguishing features of this cluster. These companies' net profit margins are above average, and revenue growth is positively correlated with them.
+
+```
+
+```{r}
+
+#taskC :  pattern in the clusters with respect to the numerical variables (10 to 12)?
+
+pattern <- pharma_OG %>% select(c(12,13,14)) %>% mutate(Cluster = k5$cluster)
+print(pattern)
+
+Median_Recommenation <- ggplot(pattern, mapping = aes(factor(Cluster), fill=Median_Recommendation)) + 
+  geom_bar(position = 'dodge') + 
+  labs(x='Clusters', y='Frequence')
+Median_Recommenation
+
+Location <- ggplot(pattern, mapping = aes(factor(Cluster),fill = Location))+
+  geom_bar(position = 'dodge')+
+  labs(x ='Clusters')
+Location
+
+Exchange <- ggplot(pattern, mapping = aes(factor(Cluster),fill = Exchange))+
+  geom_bar(position = 'dodge')+
+  labs(x ='Clusters')
+Exchange
+
+#Cluster 1 pattern shows a range of options, including Hold, Moderate Buy, Moderate Sell, and Strong Buy. The median rating for Hold is the highest, according to the pattern, indicating that the companies in this cluster are generally regarded as stable and having a moderate potential for growth.
+
+#Cluster2 pattern represents a group of companies that have distinct median ratings for Hold and Moderate Buy, the compamies are evenly dispersed on the AMEX, NASDAQ and NYSE. 
+
+#cluster3 has the same median values for both hold and moderate buy behavior. The cluster is distributed throughout the US and the UK in addition, and the business is listed on the New York Stock Exchange.
+
+#cluster4 has similar median values for both hold and moderate buy behavior than cluster 3. Additionally, the cluster is located in both the United States and Canada, and the company is listed on the New York Stock Exchange.
+
+#Cluster5 has similar median values for both moderate buy and sell behavior, but a different count compared to previous  Clusters. Additionally, the cluster is located in France, Ireland, and the United States, and the company is listed on the New York Stock Exchange.
+```
+
+```{r}
+
+#taskD:Providing an appropriate name for each cluster using any or all of the variables in the data set
+
+#cluster1: Steady Growth and Profitability Cluster
+#This cluster represents companies that have steady but not exceptional growth and profitability. The companies in this cluster have a negative correlation with leverage and slightly above-average net profit margins.
+
+#Cluster2: High Risk and Uncertain Growth Cluster 
+#This cluster represents companies with high risk and uncertain growth prospects. The companies in this cluster have extremely low market capitalizations, high betas, very high P/E ratios, negative ROE and ROA, and negative net profit margins.
+
+#cluster3: Low Profitability and Uncertain Growth Cluster
+#This cluster represents companies with low profitability and uncertain growth prospects. The companies in this cluster have relatively low market capitalizations, negative betas, low P/E ratios, and negative ROE and ROA.
+
+#cluster4 :Strong Profitability and Growth Cluster
+#This cluster represents companies with strong profitability and growth prospects. The companies in this cluster have relatively high market capitalizations, negative betas, low to moderate P/E ratios, and high ROE and ROA.
+
+#cluster5 : High Risk Strong Profitability and Growth Cluster
+#This cluster represents companies with strong profitability and growth prospects, but with a higher level of risk due to their positive betas. The companies in this cluster have relatively high market capitalizations, positive betas, low to moderate P/E ratios, and moderate to high ROE and ROA.
+
+```
